@@ -1,0 +1,11 @@
+node_modules/
+.npm-cache/
+.test-dist/
+.qa/
+dist/
+*.vsix
+.env
+.env.*
+!.env.example
+*.log
+.vscode/settings.json

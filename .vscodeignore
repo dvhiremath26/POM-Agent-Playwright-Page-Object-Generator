@@ -1,0 +1,13 @@
+src/**
+.npm-cache/**
+.test-dist/**
+.qa/**
+tsconfig.test.json
+test/**
+.vscode/**
+tsconfig.json
+PROMPT.md
+**/*.map
+**/*.d.ts
+.env*
+*.vsix

@@ -1,0 +1,144 @@
+{
+  "name": "pom-agent",
+  "displayName": "POM Agent",
+  "description": "Playwright page objects grouped by logical screens with GitHub Copilot, bounded requests and preserved locator chains.",
+  "version": "1.0.0",
+  "publisher": "pom-agent",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Testing",
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "pomAgent.openDashboard",
+        "title": "POM Agent: Open Dashboard",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "pomAgent.organizeFile",
+        "title": "POM Agent: Organize Codegen File into Page Objects"
+      },
+      {
+        "command": "pomAgent.organizeSelection",
+        "title": "POM Agent: Organize Selected Codegen Code into Page Objects"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "pomAgent.organizeFile",
+          "when": "resourceExtname == .ts",
+          "group": "pomAgent"
+        },
+        {
+          "command": "pomAgent.organizeSelection",
+          "when": "editorHasSelection && resourceExtname == .ts",
+          "group": "pomAgent"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "pomAgent.organizeFile",
+          "when": "resourceExtname == .ts",
+          "group": "pomAgent"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "POM Agent",
+      "properties": {
+        "pomAgent.generationMode": {
+          "type": "string",
+          "enum": [
+            "copilot",
+            "local"
+          ],
+          "default": "copilot",
+          "description": "Copilot groups logical screens and names actions in one request; local groups by navigation URL. Code and locator chains are always generated locally."
+        },
+        "pomAgent.copilotModel": {
+          "type": "string",
+          "default": "",
+          "description": "Optional preferred Copilot model ID, shown first in the model picker when available. You choose a model before every new request; there is no automatic selection. Changing this preference invalidates cached output for the run. Claude, auto routing, and known internal utility endpoints are excluded."
+        },
+        "pomAgent.maxInputTokens": {
+          "type": "number",
+          "default": 6000,
+          "minimum": 256,
+          "maximum": 32000,
+          "description": "Maximum input tokens for the single Copilot naming request. Over-budget prompts stop before sending. This is not a credit-price limit."
+        },
+        "pomAgent.pagesDir": {
+          "type": "string",
+          "default": "pages",
+          "description": "Workspace-relative page object directory."
+        },
+        "pomAgent.testsDir": {
+          "type": "string",
+          "default": "tests",
+          "description": "Workspace-relative generated tests directory."
+        },
+        "pomAgent.testDataDir": {
+          "type": "string",
+          "default": "test-data",
+          "description": "Workspace-relative test data directory."
+        },
+        "pomAgent.conventionsFile": {
+          "type": "string",
+          "default": "conventions.md",
+          "description": "Workspace-relative repository conventions file."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "pomAgent",
+          "title": "POM Agent",
+          "icon": "media/pom-agent.svg"
+        }
+      ]
+    },
+    "views": {
+      "pomAgent": [
+        {
+          "id": "pomAgent.dashboard",
+          "name": "Build page objects",
+          "type": "webview"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "check": "tsc --noEmit -p .",
+    "test": "npm run compile && tsc -p tsconfig.test.json && node --test .test-dist/*.test.js",
+    "vscode:prepublish": "npm run compile",
+    "package": "vsce package --allow-missing-repository"
+  },
+  "dependencies": {
+    "ts-morph": "^27.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.96.0",
+    "@vscode/vsce": "^3.7.1",
+    "typescript": "^5.9.3",
+    "@playwright/test": "^1.58.0"
+  }
+}
