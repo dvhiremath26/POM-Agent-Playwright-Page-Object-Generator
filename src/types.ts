@@ -11,8 +11,9 @@ export interface RepoContext {
   directories?: OutputDirectories;
   pageInventory?: string[];
   omittedContext?: number;
+  continuationSpec?: string;
 }
-export interface GeneratedFile { path: string; mode: 'create' | 'merge'; content: string }
+export interface GeneratedFile { path: string; mode: 'create' | 'merge' | 'append-test'; content: string }
 export interface GenerationResult { files: GeneratedFile[]; summary: string }
 export const defaultDirectories: OutputDirectories = {
   pagesDir: 'pages', testsDir: 'tests', testDataDir: 'test-data',

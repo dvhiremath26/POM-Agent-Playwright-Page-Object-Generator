@@ -3,7 +3,6 @@ node_modules/
 .test-dist/
 .qa/
 dist/
-*.vsix
 .env
 .env.*
 !.env.example

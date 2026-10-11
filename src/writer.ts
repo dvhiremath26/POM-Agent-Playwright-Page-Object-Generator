@@ -34,7 +34,7 @@ function spaceLocatorFields(source: SourceFile): string {
   for (const declaration of source.getClasses()) {
     const members = declaration.getMembers();
     members.forEach((member, index) => {
-      if (!index || !Node.isPropertyDeclaration(member) || member.getTypeNode()?.getText() !== 'Locator') return;
+      if (!index || !Node.isPropertyDeclaration(member) || !['Locator', 'FrameLocator'].includes(member.getTypeNode()?.getText() ?? '')) return;
       const start = member.getLeadingCommentRanges()[0]?.getPos() ?? member.getStart();
       const lineStart = text.lastIndexOf('\n', start - 1) + 1;
       if (!/^[ \t]*$/.test(text.slice(lineStart, start)) || lineStart <= members[index - 1].getEnd()) return;
@@ -116,10 +116,32 @@ function mergeMembers(original: string, fragment: string, file: string): string 
     ...declaration.getNamedImports().map(item => item.getAliasNode()?.getText() ?? item.getName()),
     declaration.getDefaultImport()?.getText(), declaration.getNamespaceImport()?.getText(),
   ]));
-  for (const name of ['Page', 'Locator', 'expect']) {
+  for (const name of ['Page', 'Locator', 'FrameLocator', 'expect']) {
     if (used.has(name) && !bound.has(name)) source.addImportDeclaration({ moduleSpecifier: '@playwright/test', namedImports: [name], isTypeOnly: name !== 'expect' });
   }
   return file.endsWith('.locators.ts') ? spaceLocatorFields(source) : source.getFullText();
+}
+
+function appendToTest(original: string, fragment: string, file: string): string {
+  const marker = /\/\/ POM Agent continuation [a-f0-9]+/.exec(fragment)?.[0];
+  if (!marker) throw new Error(`Invalid continuation fragment: ${file}`);
+  if (original.includes(marker)) return original;
+  const project = new Project({ useInMemoryFileSystem: true, manipulationSettings: { indentationText: IndentationText.TwoSpaces } });
+  const source = project.createSourceFile('/target.spec.ts', original);
+  const scratch = project.createSourceFile('/fragment.ts', fragment);
+  const callback = source.getDescendantsOfKind(SyntaxKind.CallExpression).find(call => call.getExpression().getText() === 'test')?.getArguments()[1];
+  if (!callback || !Node.isArrowFunction(callback) || !Node.isBlock(callback.getBody())) throw new Error(`Continuation target must contain one plain Playwright test: ${file}`);
+  const targetBody = callback.getBody().asKindOrThrow(SyntaxKind.Block);
+  const fragmentCallback = scratch.getStatements().find(Node.isExpressionStatement)?.getExpression();
+  if (!fragmentCallback || !Node.isArrowFunction(fragmentCallback) || !Node.isBlock(fragmentCallback.getBody())) throw new Error(`Invalid continuation body: ${file}`);
+  const fragmentBody = fragmentCallback.getBody().asKindOrThrow(SyntaxKind.Block);
+  const bound = new Set(source.getImportDeclarations().flatMap(declaration => declaration.getNamedImports().map(item => item.getName())));
+  for (const declaration of scratch.getImportDeclarations()) {
+    const names = declaration.getNamedImports().filter(item => !bound.has(item.getName())).map(item => item.getName());
+    if (names.length) source.addImportDeclaration({ moduleSpecifier: declaration.getModuleSpecifierValue(), namedImports: names });
+  }
+  targetBody.addStatements(fragmentBody.getStatements().map(statement => statement.getFullText()));
+  return source.getFullText();
 }
 
 export async function writeGeneratedFiles(root: string, files: GeneratedFile[], transaction = new FileTransaction(), directories: OutputDirectories = defaultDirectories): Promise<string[]> {
@@ -140,6 +162,9 @@ export async function writeGeneratedFiles(root: string, files: GeneratedFile[], 
       if (before !== null && before !== generated.content) throw new Error(`Refusing to overwrite existing file; use merge or a new path: ${generated.path}`);
       after = generated.content;
       if (file.endsWith('.json')) JSON.parse(after);
+    } else if (generated.mode === 'append-test') {
+      if (before === null || !file.endsWith('.spec.ts')) throw new Error(`Continuation requires an existing .spec.ts file: ${generated.path}`);
+      after = appendToTest(before, generated.content, generated.path);
     } else {
       if (before === null || !file.endsWith('.ts')) throw new Error(`Merge requires an existing TypeScript file: ${generated.path}`);
       after = mergeMembers(before, generated.content, generated.path);

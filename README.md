@@ -4,7 +4,7 @@ Convert Playwright Codegen recordings into page objects, locator classes, tests,
 
 ## Install
 
-Install `pom-agent-1.0.0.vsix` using **Extensions → … → Install from VSIX**, then reload VS Code. Click **POM Agent** in the Activity Bar, or use **POM Agent: Open Dashboard**. Sign in to GitHub Copilot in VS Code to use Copilot organization.
+Install `pom-agent-1.0.2.vsix` using **Extensions → … → Install from VSIX**, then reload VS Code. Click **POM Agent** in the Activity Bar, or use **POM Agent: Open Dashboard**. Sign in to GitHub Copilot in VS Code to use Copilot organization.
 
 Open a trusted Playwright workspace with a root `tsconfig.json`, locally installed TypeScript, `@playwright/test`, and Node types. Include generated pages/tests in the TypeScript configuration. Set `"useDefineForClassFields": false` under `compilerOptions` for locator initializers that use the constructor's page parameter. The extension checks compatibility without modifying project configuration.
 
@@ -22,6 +22,8 @@ npm run package
 2. **Describe the test (optional).** Paste English steps or load a .txt/.md file. Loaded text is editable. Without notes, Copilot infers names from action/selector descriptions.
 3. **Choose the generation mode and output folders.** GitHub Copilot organization groups logical screens and interprets flexible English for clearer locator/method/data names. Local only groups by navigation URL and uses simple naming rules. Output defaults are pages, tests, and test-data; paths are relative to the recording's workspace.
 4. **Check readiness and generate.** Save files and resolve setup errors, then click Generate page objects. Follow progress, cancel, and open generated results from the sidebar.
+
+For a recording split into two portions, generate the first portion normally. For the second portion, enter the first generated test's workspace-relative path in **Continuation spec file**, for example `tests/buyer-flow/buyer-flow.spec.ts`. The second portion may begin directly with an interaction; it does not need to repeat `page.goto()`. POM Agent adds a marked continuation block to the selected test, adds only the required page-object members, and refuses an invalid or missing spec path.
 
 The right-click and Command Palette file/selection commands remain available and use workspace settings. The sidebar adapts to VS Code themes and narrow widths and supports keyboard use. It loads no remote UI assets. Sidebar options apply to the current sidebar session.
 
@@ -109,6 +111,22 @@ readonly CONTINUE_LINK: Locator = this.page
 ```
 
 Removing frameLocator() changes the search scope. POM Agent now supports it locally and does not remove it to satisfy older Playwright types. The workspace must use a Playwright version supporting the recorded API. See [Playwright's frameLocator documentation](https://playwright.dev/docs/api/class-page#page-frame-locator).
+
+When two or more locators in the same locator class use the identical completed iframe scope, POM Agent declares that scope once as a `FrameLocator` and chains the element locators from it. For example:
+
+```ts
+readonly FRAME_28FA358BD9: FrameLocator = this.page
+  .locator('[data-testid="iframe"]')
+  .contentFrame()
+  .locator('iframe[name="frmMain"]')
+  .contentFrame();
+
+readonly SEARCH_LINK: Locator = this.FRAME_28FA358BD9.getByRole('link', { name: 'Search' });
+
+readonly NEW_LINK: Locator = this.FRAME_28FA358BD9.getByRole('link', { name: 'New' });
+```
+
+The optimization is scoped to each page class and only applies to repeated, identical frame paths. One-off frame chains remain inline. Existing generated frame fields are recognized on later runs, so locators and methods are not duplicated.
 
 Local conversion accepts a single plain async test with the page fixture, or awaited statements starting with literal page.goto(). Supported factories include getByRole, getByTestId, getByLabel, getByPlaceholder, getByText, literal locator(), frameLocator(), contentFrame(), and locator first()/last()/nonnegative nth(). It preserves nested scopes and selector strings. CSS/XPath selectors receive a review comment, not an automatic replacement.
 

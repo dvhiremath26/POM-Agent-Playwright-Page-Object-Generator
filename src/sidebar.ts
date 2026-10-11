@@ -186,6 +186,7 @@ export class PomSidebar implements Vscode.WebviewViewProvider, Vscode.Disposable
     const folder = this.api.workspace.getWorkspaceFolder(this.selected.uri);
     if (!folder) throw new Error('Reopen the project containing this recording.');
     for (const value of [settings.pagesDir, settings.testsDir, settings.testDataDir, settings.conventionsFile]) resolveInside(folder.uri.fsPath, value);
+    if (settings.continuationSpec) resolveInside(folder.uri.fsPath, settings.continuationSpec);
     const document = await this.api.workspace.openTextDocument(this.selected.uri);
     if (this.selected.range && document.version !== this.selected.version) throw new Error('The file changed after you selected code. Select the intended code again and click Use selection.');
     await this.refreshChecks();

@@ -34,7 +34,7 @@ function literal(node: Node | undefined): string | undefined {
   return node && (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node)) ? node.getLiteralText() : undefined;
 }
 
-interface LocatorChain { expression: string; label: string; suffix: string; type: 'page' | 'locator' | 'frame'; css: boolean }
+interface LocatorChain { expression: string; label: string; suffix: string; type: 'page' | 'locator' | 'frame'; css: boolean; frame?: string }
 function locator(call: Node): LocatorChain | undefined {
   if (Node.isPropertyAccessExpression(call) && call.getExpression().getKind() === SyntaxKind.ThisKeyword && call.getName() === 'page') return { expression: 'page', label: 'Page', suffix: 'Element', type: 'page', css: false };
   if (Node.isIdentifier(call) && call.getText() === 'page') return { expression: 'page', label: 'Page', suffix: 'Element', type: 'page', css: false };
@@ -46,10 +46,11 @@ function locator(call: Node): LocatorChain | undefined {
   const kind = access.getName();
   const args = call.getArguments();
   if (kind === 'frameLocator' && args.length === 0 && parent.type === 'page') {
-    return { expression: `${parent.expression}.frameLocator()`, label: 'Frame', suffix: 'Element', type: 'frame', css: parent.css };
+    const expression = `${parent.expression}.frameLocator()`;
+    return { expression, label: 'Frame', suffix: 'Element', type: 'frame', css: parent.css, frame: expression };
   }
   if (kind === 'contentFrame') return parent.type === 'locator' && args.length === 0
-    ? { ...parent, expression: `${parent.expression}.contentFrame()`, type: 'frame' } : undefined;
+    ? { ...parent, expression: `${parent.expression}.contentFrame()`, type: 'frame', frame: `${parent.expression}.contentFrame()` } : undefined;
   if (['first', 'last', 'nth'].includes(kind)) {
     if (parent.type !== 'locator') return undefined;
     if (kind === 'nth') {
@@ -60,7 +61,9 @@ function locator(call: Node): LocatorChain | undefined {
   const first = literal(args[0]);
   if (kind === 'locator' || kind === 'frameLocator') {
     if (first === undefined || args.length !== 1) return undefined;
-    return { expression: `${parent.expression}.${kind}(${JSON.stringify(first)})`, label: kind === 'locator' ? 'RecordedElement' : 'Frame', suffix: 'Element', type: kind === 'locator' ? 'locator' : 'frame', css: true };
+    const expression = `${parent.expression}.${kind}(${JSON.stringify(first)})`;
+    return { expression, label: kind === 'locator' ? 'RecordedElement' : 'Frame', suffix: 'Element', type: kind === 'locator' ? 'locator' : 'frame', css: true,
+      frame: kind === 'frameLocator' ? expression : parent.type === 'frame' ? parent.expression : parent.frame };
   }
   if (!['getByRole', 'getByTestId', 'getByLabel', 'getByPlaceholder', 'getByText'].includes(kind)) return undefined;
   if (first === undefined || args.length > 2 || args.length < 1) return undefined;
@@ -85,7 +88,8 @@ function locator(call: Node): LocatorChain | undefined {
   label = typeof options.name === 'string' ? options.name : typeof options.description === 'string' ? options.description : label;
   const suffix = kind === 'getByRole' ? ({ button: 'Btn', link: 'Link', checkbox: 'Checkbox', combobox: 'Dropdown', textbox: 'Input' }[first] ?? 'Element')
     : ['getByLabel', 'getByPlaceholder'].includes(kind) ? 'Input' : 'Element';
-  return { expression: `${parent.expression}.${kind}(${JSON.stringify(first)}${args[1] ? `, ${JSON.stringify(options)}` : ''})`, label, suffix, type: 'locator', css: parent.css };
+  return { expression: `${parent.expression}.${kind}(${JSON.stringify(first)}${args[1] ? `, ${JSON.stringify(options)}` : ''})`, label, suffix, type: 'locator', css: parent.css,
+    frame: parent.type === 'frame' ? parent.expression : parent.frame };
 }
 
 /** Recognize only the adjacent wait -> goto -> await pattern with an unused popup handle.
@@ -119,7 +123,7 @@ function popupNavigations(statements: Statement[]): { statements: Statement[]; n
 
 interface Section {
   slug: string; className: string; instance: string;
-  locators: Map<string, { expression: string; name: string; css: boolean }>;
+  locators: Map<string, { expression: string; name: string; css: boolean; frame?: string }>;
   methods: Map<string, string>;
   existingLocators: Map<string, string>;
   methodIdentities: Map<string, string>;
@@ -137,10 +141,20 @@ function existingLocatorNames(project: Project, ctx: RepoContext, filePath: stri
   const names = new Map<string, string>();
   const file = ctx.existingPages.find(item => item.relativePath === filePath);
   if (!file) return names;
-  const klass = project.createSourceFile(`/names/${filePath}`, file.content).getClasses()[0];
+  const klass = project.createSourceFile(`/names/${filePath}`, file.content, { overwrite: true }).getClasses()[0];
+  let resolvedFile = 0;
   for (const property of klass?.getProperties() ?? []) {
     const initializer = property.getInitializer();
-    const expression = initializer ? locator(initializer)?.expression : undefined;
+    let expression = initializer ? locator(initializer)?.expression : undefined;
+    // New generated locator fields may start with a reusable frame field. Expand
+    // earlier fields locally so repeat generation still recognizes the complete
+    // recorded chain and does not duplicate locators.
+    if (!expression && initializer) {
+      const text = initializer.getText().replace(/\bthis\.([A-Za-z_$][\w$]*)/g, (match, name: string) => names.get(name) ?? match);
+      const resolved = project.createSourceFile(`/names-resolved/${filePath}-${resolvedFile++}.ts`, `${text};`, { overwrite: true });
+      const statement = resolved.getStatements()[0];
+      expression = Node.isExpressionStatement(statement) ? locator(statement.getExpression())?.expression : undefined;
+    }
     names.set(property.getName(), expression ?? 'reserved');
   }
   for (const assignment of klass?.getConstructors()[0]?.getDescendantsOfKind(SyntaxKind.BinaryExpression) ?? []) {
@@ -263,7 +277,7 @@ export function generateLocally(codegenSource: string, ctx: RepoContext): LocalR
       steps.push(`await ${current.instance}.${method}(${addData(url, `${hint?.label ?? slug} Url`)});`);
       continue;
     }
-    if (!current) return { reason: 'Local conversion needs an initial literal page.goto() to identify the page.' };
+    if (!current) current = sectionFor(pageGroupSlug(hint?.page) ?? 'continuation');
     let selected = locator(receiver);
     let assertion = false;
     if (Node.isCallExpression(receiver) && receiver.getExpression().getText() === 'expect' && receiver.getArguments().length === 1) {
@@ -289,7 +303,7 @@ export function generateLocally(codegenSource: string, ctx: RepoContext): LocalR
     let collision = 2;
     while (current.existingLocators.has(locatorName) && current.existingLocators.get(locatorName) !== selected.expression) locatorName = `${baseName}_${collision++}`;
     current.existingLocators.set(locatorName, selected.expression);
-    current.locators.set(key, { name: locatorName, expression: selected.expression, css: selected.css });
+    current.locators.set(key, { name: locatorName, expression: selected.expression, css: selected.css, frame: selected.frame });
     const label = hint?.label ?? selected.label;
     const preferred = hints ? `${assertion ? 'verify' : action === 'fill' ? 'enter' : action}${pascal(label).slice(0, 60) || 'Element'}` : `${action}${pascal(selected.label).slice(0, 45) || 'Element'}_${key}`;
     const expression = `this.locators.${locatorName}`;
@@ -304,7 +318,7 @@ export function generateLocally(codegenSource: string, ctx: RepoContext): LocalR
   files.push({ path: basePath, mode: 'create', content: baseSource });
   const flowName = hints?.title?.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase().slice(0, 60).replace(/-+$/, '') || 'flow';
   const flow = `${flowName}-${hash(codegenSource + (hints ? `\nTEST STEPS:\n${ctx.testSteps}` : '') + (ctx.namingPlan ? JSON.stringify(ctx.namingPlan) : ''))}`;
-  const testPath = `${dirs.testsDir}/${flow}/${flow}.spec.ts`;
+  const testPath = ctx.continuationSpec ?? `${dirs.testsDir}/${flow}/${flow}.spec.ts`;
   const dataPath = `${dirs.testDataDir}/${flow}/${flow}.data.json`;
   const imports = ["import { test } from '@playwright/test';"];
   const instances: string[] = [];
@@ -312,12 +326,34 @@ export function generateLocally(codegenSource: string, ctx: RepoContext): LocalR
     const pagePath = `${dirs.pagesDir}/${section.slug}/${section.slug}.page.ts`;
     const locatorsPath = `${dirs.pagesDir}/${section.slug}/${section.slug}.locators.ts`;
     const locatorsName = section.className.replace(/Page$/, 'Locators');
-    const fields = [...section.locators.values()].map(item => `${item.css ? '// Recorded CSS/XPath retained. Prefer stable test IDs or role locators where available; verify before changing.\n  ' : ''}readonly ${item.name}: Locator = ${item.expression.replace(/^page\./, 'this.page.')};`).join('\n\n  ');
-    const locatorMembers = `constructor(private page: Page) {}\n\n  ${fields}`;
+    const locatorItems = [...section.locators.values()];
+    // Only factor a frame scope when it is shared. One-off frame fields add noise
+    // without reducing duplication.
+    const frameCounts = new Map<string, number>();
+    for (const item of locatorItems) if (item.frame) frameCounts.set(item.frame, (frameCounts.get(item.frame) ?? 0) + 1);
+    const frameFields = new Map<string, string>();
+    const usedNames = new Set(section.existingLocators.keys());
+    for (const [frame, count] of frameCounts) {
+      if (count < 2) continue;
+      const existing = [...section.existingLocators].find(([, expression]) => expression === frame)?.[0];
+      let name = existing ?? `FRAME_${hash(frame).toUpperCase()}`;
+      let collision = 2;
+      while (usedNames.has(name) && section.existingLocators.get(name) !== frame) name = `FRAME_${hash(frame).toUpperCase()}_${collision++}`;
+      usedNames.add(name); frameFields.set(frame, name);
+    }
+    const sharedFrames = [...frameFields].map(([frame, name]) => `${frame.includes('.locator(') ? '// Recorded CSS/XPath retained. Prefer stable test IDs or role locators where available; verify before changing.\n  ' : ''}readonly ${name}: FrameLocator = ${frame.replace(/^page\./, 'this.page.')};`);
+    const fields = locatorItems.map(item => {
+      const frame = item.frame && frameFields.get(item.frame);
+      const expression = frame ? `this.${frame}${item.expression.slice(item.frame!.length)}` : item.expression.replace(/^page\./, 'this.page.');
+      return `${item.css && !frame ? '// Recorded CSS/XPath retained. Prefer stable test IDs or role locators where available; verify before changing.\n  ' : ''}readonly ${item.name}: Locator = ${expression};`;
+    });
+    const locatorDeclarations = [...sharedFrames, ...fields].join('\n\n  ');
+    const locatorMembers = `constructor(private page: Page) {}\n\n  ${locatorDeclarations}`;
+    const locatorImports = sharedFrames.length ? 'FrameLocator, Locator, Page' : 'Locator, Page';
     const methods = [...section.methods.values()].join('\n\n  ');
     const pageMembers = `private readonly locators: ${locatorsName};\n\n  constructor(page: Page) {\n    super(page);\n    this.locators = new ${locatorsName}(page);\n  }\n\n  ${methods}`;
     const candidates = [
-      { path: locatorsPath, members: locatorMembers, content: `${marker}\nimport { Locator, Page } from '@playwright/test';\n\nexport class ${locatorsName} {\n  ${locatorMembers}\n}\n` },
+      { path: locatorsPath, members: locatorMembers, content: `${marker}\nimport { ${locatorImports} } from '@playwright/test';\n\nexport class ${locatorsName} {\n  ${locatorMembers}\n}\n` },
       { path: pagePath, members: methods, content: `${marker}\nimport { expect, type Page } from '@playwright/test';\nimport { BasePage } from ${JSON.stringify(importPath(pagePath, basePath))};\nimport { ${locatorsName} } from ${JSON.stringify(importPath(pagePath, locatorsPath))};\n\nexport class ${section.className} extends BasePage {\n  ${pageMembers}\n}\n` },
     ];
     for (const candidate of candidates) {
@@ -335,10 +371,11 @@ export function generateLocally(codegenSource: string, ctx: RepoContext): LocalR
         // A modified constructor or locator can change semantics even while types still pass.
         if (candidate.path === locatorsPath) {
           const body = before.getConstructors()[0]?.getBodyText() ?? '';
+          const existingNames = existingLocatorNames(project, ctx, candidate.path);
           for (const item of section.locators.values()) {
             const property = before.getProperty(item.name);
             const initializer = property?.getInitializer();
-            if (property && (initializer ? locator(initializer)?.expression !== item.expression : !body.includes(`this.${item.name} = ${item.expression};`))) return { reason: 'An existing locator was customized.' };
+            if (property && (initializer ? existingNames.get(item.name) !== item.expression : !body.includes(`this.${item.name} = ${item.expression};`))) return { reason: 'An existing locator was customized.' };
           }
         } else if (!sameCode(before.getConstructors()[0], after.getConstructors()[0])) return { reason: 'An existing page constructor was customized.' };
       }
@@ -349,6 +386,13 @@ export function generateLocally(codegenSource: string, ctx: RepoContext): LocalR
   }
   imports.push(`const data: ${JSON.stringify(Object.fromEntries(Object.keys(data).map(key => [key, '__STRING__']))).replace(/"__STRING__"/g, 'string')} = require(${JSON.stringify(importPath(testPath, dataPath))});`);
   files.push({ path: dataPath, mode: 'create', content: JSON.stringify(data, null, 2) + '\n' });
-  files.push({ path: testPath, mode: 'create', content: `${marker}\n${imports.join('\n')}\n\ntest(data.title, async ({ page }) => {\n  ${[...instances, ...steps].join('\n  ')}\n});\n` });
-  return { result: { files, summary: `Converted ${sections.size} page(s) using ${ctx.namingPlan ? 'Copilot organization and local code generation' : `local rules${hints ? ' and local naming guidance' : ''}`}.` }, reason: 'All statements are supported by local rules.', namingNotice, namingActions };
+  const dataDeclaration = imports.pop()!;
+  const body = [...instances, ...steps].join('\n  ');
+  if (ctx.continuationSpec) {
+    const continuationMarker = `// POM Agent continuation ${hash(codegenSource)}`;
+    const continuationData = dataDeclaration.replace(/\bdata\b/g, 'continuationData');
+    const continuationBody = body.replace(/\bdata\./g, 'continuationData.');
+    files.push({ path: testPath, mode: 'append-test', content: `${marker}\n${imports.filter(item => item !== "import { test } from '@playwright/test';").join('\n')}\n\nasync ({ page }) => {\n  ${continuationMarker}\n  ${continuationData}\n  ${continuationBody}\n};\n` });
+  } else files.push({ path: testPath, mode: 'create', content: `${marker}\n${[...imports, dataDeclaration].join('\n')}\n\ntest(data.title, async ({ page }) => {\n  ${body}\n});\n` });
+  return { result: { files, summary: `${ctx.continuationSpec ? 'Extended the selected test with' : 'Converted'} ${sections.size} page(s) using ${ctx.namingPlan ? 'Copilot organization and local code generation' : `local rules${hints ? ' and local naming guidance' : ''}`}.` }, reason: 'All statements are supported by local rules.', namingNotice, namingActions };
 }

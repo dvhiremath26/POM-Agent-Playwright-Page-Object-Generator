@@ -26,6 +26,7 @@ declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
       conventionsFile: input('conventionsFile').value,
       generationMode: get<HTMLSelectElement>('generationMode').value,
       copilotModel: input('copilotModel').value,
+      continuationSpec: input('continuationSpec').value,
     };
     // Immediately prevent double submissions while the host validates the request.
     get<HTMLButtonElement>('run').disabled = true;
@@ -45,6 +46,7 @@ declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
       for (const key of ['pagesDir', 'testsDir', 'testDataDir', 'conventionsFile'] as const) input(key).value = state.settings[key];
       get<HTMLSelectElement>('generationMode').value = state.settings.generationMode ?? 'copilot';
       input('copilotModel').value = state.settings.copilotModel ?? '';
+      input('continuationSpec').value = state.settings.continuationSpec ?? '';
       revision = state.settingsRevision;
     }
     get('empty-source').hidden = !!state.source;

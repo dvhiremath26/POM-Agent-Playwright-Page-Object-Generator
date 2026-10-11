@@ -75,6 +75,7 @@ export async function runAgent(codegenSource: string, sourceUri: vscode.Uri, ui?
         workspaceRoot: root, codegenSource, cache, testSteps: ui?.testSteps,
         generationMode: ui?.settings.generationMode ?? config.get<'local' | 'copilot'>('generationMode', 'copilot'),
         copilotModel: ui?.settings.copilotModel ?? config.get<string>('copilotModel', ''),
+        continuationSpec: ui?.settings.continuationSpec,
         copilot: createCopilotClient({ modelId: ui?.settings.copilotModel ?? config.get<string>('copilotModel', ''),
           maxInputTokens: config.get<number>('maxInputTokens', 6000), token, report }),
         isCancelled: () => token.isCancellationRequested,

@@ -30,6 +30,8 @@ export function sidebarHtml(scriptUri: string, styleUri: string, nonce: string, 
       <label>Test data<input id="testDataDir" type="text" value="test-data" spellcheck="false"></label>
       <label>Conventions file<input id="conventionsFile" type="text" value="conventions.md" spellcheck="false"></label>
       <label>Preferred Copilot model ID (optional)<input id="copilotModel" type="text" placeholder="Choose in the model picker before generation" spellcheck="false"></label>
+      <label>Continuation spec file (optional)<input id="continuationSpec" type="text" placeholder="tests/your-flow/your-flow.spec.ts" spellcheck="false"></label>
+      <p class="hint">For the next portion of a split Codegen flow, enter the existing generated spec path. The new page-object calls are appended to that test.</p>
       <p class="hint">Choose the model before each new Copilot request. An available preferred model appears first in the picker; you can still choose another. Cached results use no request or picker. Paths are relative to your project. These choices apply to sidebar runs.</p>
     </div></details>
   </section>

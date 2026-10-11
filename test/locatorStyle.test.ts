@@ -48,6 +48,30 @@ await page.frameLocator('#second').getByRole('button', { name: 'Login' }).click(
   assert.ok(written.every(file => !file.endsWith('.locators.ts') && !file.endsWith('.page.ts')));
 });
 
+test('shared iframe scopes are declared once and reused by each locator', async t => {
+  const root = await fixture(t);
+  const frame = `page.locator('[data-testid="iframe"]').contentFrame().locator('iframe[name="frmMain"]').contentFrame()`;
+  const source = `await page.goto('/projects');
+await ${frame}.getByRole('link', { name: 'Search' }).click();
+await ${frame}.getByRole('link', { name: 'New' }).click();
+await ${frame}.getByRole('link', { name: 'Apply' }).click();
+await page.getByTestId('save-project').click();`;
+  const generated = generateLocally(source, empty).result!;
+  const locators = generated.files.find(file => file.path.endsWith('.locators.ts'))!.content;
+  assert.match(locators, /import \{ FrameLocator, Locator, Page \} from '@playwright\/test';/);
+  const frameMatch = locators.match(/readonly (FRAME_[A-F0-9]+): FrameLocator = this\.page\.locator\([^;]+\.contentFrame\(\);/);
+  assert.ok(frameMatch, 'The common iframe scope should be declared once.');
+  const frameName = frameMatch[1];
+  assert.match(locators, new RegExp(`readonly SEARCH_LINK: Locator = this\\.${frameName}\\.getByRole`));
+  assert.match(locators, new RegExp(`readonly NEW_LINK: Locator = this\\.${frameName}\\.getByRole`));
+  assert.match(locators, new RegExp(`readonly APPLY_LINK: Locator = this\\.${frameName}\\.getByRole`));
+  assert.match(locators, /readonly SAVE_PROJECT_ELEMENT: Locator = this\.page\.getByTestId/);
+  await writeGeneratedFiles(root, generated.files);
+  const again = generateLocally(source, await buildRepoContext(root, 'pages', 'conventions.md'));
+  assert.ok(again.result, again.reason);
+  assert.deepEqual(await writeGeneratedFiles(root, again.result.files), [], 'A repeated run should reuse the frame and locator fields.');
+});
+
 test('legacy locator names and methods survive while new fields use the requested style', async t => {
   const root = await fixture(t);
   await fs.mkdir(path.join(root, 'pages/login'), { recursive: true });

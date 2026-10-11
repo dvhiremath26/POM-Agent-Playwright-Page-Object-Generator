@@ -1,4 +1,4 @@
-import { buildRepoContext } from './indexer';
+import { buildRepoContext, readOptional } from './indexer';
 import { generateLocally } from './localGenerator';
 import { cacheMatches, fingerprint, RunCache, snapshot } from './cache';
 import { FileTransaction, writeGeneratedFiles } from './writer';
@@ -15,6 +15,7 @@ export interface AgentOptions {
   testSteps?: string;
   generationMode?: 'local' | 'copilot';
   copilotModel?: string;
+  continuationSpec?: string;
   copilot?: CopilotClient;
   directories?: OutputDirectories;
   cache?: RunCache;
@@ -33,9 +34,13 @@ export async function executeAgent(options: AgentOptions, dependencies: AgentDep
   const testSteps = validateTestSteps(options.testSteps ?? '');
   const dirs = options.directories ?? defaultDirectories;
   Object.values(dirs).forEach(dir => resolveInside(root, dir));
+  if (options.continuationSpec) {
+    const continuationPath = resolveInside(root, options.continuationSpec);
+    if (!options.continuationSpec.endsWith('.spec.ts') || await readOptional(continuationPath) === null) throw new Error('Choose an existing generated .spec.ts file for the continuation.');
+  }
   const checkCancelled = (): void => { if (options.isCancelled?.()) throw new Error('Cancelled; no further requests will be made.'); };
   const useCopilot = options.generationMode === 'copilot';
-  const cacheKey = fingerprint(JSON.stringify({ version: 10, root, codegenSource, testSteps, dirs, conventionsFile: options.conventionsFile, useCopilot, model: useCopilot ? options.copilotModel ?? '' : '' }));
+  const cacheKey = fingerprint(JSON.stringify({ version: 11, root, codegenSource, testSteps, dirs, conventionsFile: options.conventionsFile, continuationSpec: options.continuationSpec ?? '', useCopilot, model: useCopilot ? options.copilotModel ?? '' : '' }));
   checkCancelled();
   const cached = await options.cache?.get(cacheKey);
   if (cached && await cacheMatches(root, cached)) {
@@ -69,6 +74,7 @@ export async function executeAgent(options: AgentOptions, dependencies: AgentDep
   checkLocatorCompatibility(root);
   ctx.pageMap = await loadPageMap(root);
   ctx.directories = dirs;
+  ctx.continuationSpec = options.continuationSpec;
   if (testSteps) { ctx.testSteps = testSteps; options.report?.('Using English test steps as naming guidance; recorded actions and values remain authoritative.'); }
   const generate = dependencies.local ?? generateLocally;
   let local = generate(codegenSource, useCopilot ? { ...ctx, conventions: null } : ctx);
