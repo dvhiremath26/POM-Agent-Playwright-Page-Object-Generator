@@ -74,7 +74,7 @@ export async function executeAgent(options: AgentOptions, dependencies: AgentDep
   checkLocatorCompatibility(root);
   ctx.pageMap = await loadPageMap(root);
   ctx.directories = dirs;
-  ctx.continuationSpec = options.continuationSpec;
+  ctx.continuationSpec = options.continuationSpec || undefined;
   if (testSteps) { ctx.testSteps = testSteps; options.report?.('Using English test steps as naming guidance; recorded actions and values remain authoritative.'); }
   const generate = dependencies.local ?? generateLocally;
   let local = generate(codegenSource, useCopilot ? { ...ctx, conventions: null } : ctx);

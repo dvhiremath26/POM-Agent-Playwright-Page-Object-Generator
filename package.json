@@ -2,7 +2,7 @@
   "name": "pom-agent",
   "displayName": "POM Agent",
   "description": "Playwright page objects grouped by logical screens with GitHub Copilot, bounded requests and preserved locator chains.",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "publisher": "pom-agent",
   "license": "MIT",
   "engines": {

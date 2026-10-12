@@ -318,7 +318,7 @@ export function generateLocally(codegenSource: string, ctx: RepoContext): LocalR
   files.push({ path: basePath, mode: 'create', content: baseSource });
   const flowName = hints?.title?.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase().slice(0, 60).replace(/-+$/, '') || 'flow';
   const flow = `${flowName}-${hash(codegenSource + (hints ? `\nTEST STEPS:\n${ctx.testSteps}` : '') + (ctx.namingPlan ? JSON.stringify(ctx.namingPlan) : ''))}`;
-  const testPath = ctx.continuationSpec ?? `${dirs.testsDir}/${flow}/${flow}.spec.ts`;
+  const testPath = ctx.continuationSpec || `${dirs.testsDir}/${flow}/${flow}.spec.ts`;
   const dataPath = `${dirs.testDataDir}/${flow}/${flow}.data.json`;
   const imports = ["import { test } from '@playwright/test';"];
   const instances: string[] = [];

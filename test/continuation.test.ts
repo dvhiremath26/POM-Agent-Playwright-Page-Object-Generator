@@ -23,3 +23,13 @@ test('a Codegen continuation without goto appends safely to a selected generated
   assert.match(content, /clickSave/);
   assert.deepEqual((await executeAgent({ workspaceRoot: root, conventionsFile: 'conventions.md', generationMode: 'local', continuationSpec: spec, codegenSource: secondSource }, { validate: validateWithTsc })).written, []);
 });
+
+test('an empty continuation field creates a normal standalone test', async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'pom-empty-continuation-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await fs.symlink(path.resolve(__dirname, '../node_modules'), path.join(root, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
+  await fs.writeFile(path.join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { target: 'ES2022', module: 'commonjs', useDefineForClassFields: false, strict: true, skipLibCheck: true, types: ['node'] }, include: ['pages/**/*.ts', 'tests/**/*.ts'] }));
+  const result = await executeAgent({ workspaceRoot: root, conventionsFile: 'conventions.md', generationMode: 'local', continuationSpec: '', codegenSource: `await page.goto('https://example.invalid/login');\nawait page.getByRole('button', { name: 'Continue' }).click();` }, { validate: validateWithTsc });
+  assert.ok(result.files.some(file => file.endsWith('.spec.ts')));
+  assert.match(result.summary, /^Converted/);
+});
