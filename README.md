@@ -4,7 +4,7 @@ Convert Playwright Codegen recordings into page objects, locator classes, tests,
 
 ## Install
 
-Install `pom-agent-1.0.2.vsix` using **Extensions → … → Install from VSIX**, then reload VS Code. Click **POM Agent** in the Activity Bar, or use **POM Agent: Open Dashboard**. Sign in to GitHub Copilot in VS Code to use Copilot organization.
+Install `pom-agent-1.0.4.vsix` using **Extensions → … → Install from VSIX**, then reload VS Code. Click **POM Agent** in the Activity Bar, or use **POM Agent: Open Dashboard**. Sign in to GitHub Copilot in VS Code to use Copilot organization.
 
 Open a trusted Playwright workspace with a root `tsconfig.json`, locally installed TypeScript, `@playwright/test`, and Node types. Include generated pages/tests in the TypeScript configuration. Set `"useDefineForClassFields": false` under `compilerOptions` for locator initializers that use the constructor's page parameter. The extension checks compatibility without modifying project configuration.
 

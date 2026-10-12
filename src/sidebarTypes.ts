@@ -47,7 +47,7 @@ export function parseSidebarMessage(value: unknown): SidebarMessage | undefined 
   return { type: 'run', ...(message.testSteps !== undefined ? { testSteps: message.testSteps as string } : {}), settings: {
     ...(settings.generationMode !== undefined ? { generationMode: settings.generationMode as 'copilot' | 'local' } : {}),
     ...(settings.copilotModel !== undefined ? { copilotModel: (settings.copilotModel as string).trim() } : {}),
-    ...(settings.continuationSpec !== undefined ? { continuationSpec: (settings.continuationSpec as string).trim() } : {}),
+    ...(settings.continuationSpec !== undefined ? { continuationSpec: (settings.continuationSpec as string).trim().replace(/\\/g, '/') } : {}),
     pagesDir: (settings.pagesDir as string).trim(), testsDir: (settings.testsDir as string).trim(),
     testDataDir: (settings.testDataDir as string).trim(), conventionsFile: (settings.conventionsFile as string).trim(),
   } };

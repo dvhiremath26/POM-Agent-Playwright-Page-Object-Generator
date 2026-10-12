@@ -60,6 +60,7 @@ declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
     }
     for (const id of ['browse', 'change-source', 'use-file', 'use-selection', 'open-folder', 'save-all', 'refresh']) get<HTMLButtonElement>(id).disabled = state.busy;
     document.querySelectorAll<HTMLInputElement>('.fields input').forEach(element => { element.disabled = state.busy; });
+    input('continuationSpec').disabled = state.busy;
     get<HTMLSelectElement>('generationMode').disabled = state.busy;
     get<HTMLButtonElement>('run').disabled = state.busy || !state.source || state.checks.some(check => !check.ok);
     get('run').firstChild!.textContent = state.busy ? 'Working… ' : 'Generate page objects ';

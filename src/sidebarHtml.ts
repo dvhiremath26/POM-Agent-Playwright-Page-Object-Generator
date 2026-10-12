@@ -22,6 +22,9 @@ export function sidebarHtml(scriptUri: string, styleUri: string, nonce: string, 
   <section class="card" aria-labelledby="mode-title"><div class="section-heading"><span class="step">03</span><h2 id="mode-title">Organize your code</h2></div>
     <label for="generationMode">Generation mode</label>
     <select id="generationMode"><option value="copilot">GitHub Copilot organization (recommended)</option><option value="local">Local only · Zero AI requests</option></select>
+    <label for="continuationSpec">Continue an existing test <span class="muted">(optional)</span></label>
+    <input id="continuationSpec" type="text" placeholder="tests/your-flow/your-flow.spec.ts" spellcheck="false" aria-describedby="continuation-help">
+    <p id="continuation-help" class="hint">For the next portion of a split Codegen flow, enter the first generated spec path relative to the workspace. Windows backslashes are accepted. Absolute paths are not allowed.</p>
     <p class="hint">Copilot groups logical screens and names actions in one request, even when the recording navigates only once. POM Agent builds and checks the code locally. Local only groups by navigation URL. Unchanged validated results use the cache. No automatic retries. Charges depend on your Copilot plan.</p>
     <p class="hint">Copilot receives action and selector descriptions, your English steps, naming conventions, and relevant existing member names. Recorded action values are kept local. Avoid including secrets in your English steps.</p>
     <details id="options"><summary>Output folders &amp; options</summary><div class="fields">
@@ -30,8 +33,6 @@ export function sidebarHtml(scriptUri: string, styleUri: string, nonce: string, 
       <label>Test data<input id="testDataDir" type="text" value="test-data" spellcheck="false"></label>
       <label>Conventions file<input id="conventionsFile" type="text" value="conventions.md" spellcheck="false"></label>
       <label>Preferred Copilot model ID (optional)<input id="copilotModel" type="text" placeholder="Choose in the model picker before generation" spellcheck="false"></label>
-      <label>Continuation spec file (optional)<input id="continuationSpec" type="text" placeholder="tests/your-flow/your-flow.spec.ts" spellcheck="false"></label>
-      <p class="hint">For the next portion of a split Codegen flow, enter the existing generated spec path. The new page-object calls are appended to that test.</p>
       <p class="hint">Choose the model before each new Copilot request. An available preferred model appears first in the picker; you can still choose another. Cached results use no request or picker. Paths are relative to your project. These choices apply to sidebar runs.</p>
     </div></details>
   </section>
